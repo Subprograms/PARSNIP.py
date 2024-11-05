@@ -17,10 +17,10 @@ class PARSNIP:
         self.root = root
         self.bAutoRefresh = False
         self.xPreviousData = None
-        self.sPreviousHiveType = None
-        self.sHivePath = ''
-        self.nEntryLimit = 100
-        self.nInterval = 300
+        self.sPreviousHiveType = None  # Track the previous hive type
+        self.sHivePath = ''  # Initialize sHivePath as an instance variable
+        self.nEntryLimit = 100  # Default entry limit
+        self.nInterval = 300  # Default interval in seconds
 
         self.root.title("PARSNIP")
         self.root.geometry("1200x600")
@@ -64,14 +64,14 @@ class PARSNIP:
         )
 
         # Set up the headings for all columns
-        self.xKeyTrees.heading('#0', text='Key')
-        self.xKeyTrees.heading('Name', text='Name')
-        self.xKeyTrees.heading('Value', text='Value')
-        self.xKeyTrees.heading('Type', text='Type')
-        self.xKeyTrees.heading('Subkey Count', text='Subkey Count')
-        self.xKeyTrees.heading('Value Count', text='Value Count')
-        self.xKeyTrees.heading('Key Size', text='Key Size')
-        self.xKeyTrees.heading('Depth', text='Depth')
+        self.xKeyTrees.heading('#0', text='Key', command=lambda: self.sortTreeview('#0', False))
+        self.xKeyTrees.heading('Name', text='Name', command=lambda: self.sortTreeview('Name', False))
+        self.xKeyTrees.heading('Value', text='Value', command=lambda: self.sortTreeview('Value', False))
+        self.xKeyTrees.heading('Type', text='Type', command=lambda: self.sortTreeview('Type', False))
+        self.xKeyTrees.heading('Subkey Count', text='Subkey Count', command=lambda: self.sortTreeview('Subkey Count', False))
+        self.xKeyTrees.heading('Value Count', text='Value Count', command=lambda: self.sortTreeview('Value Count', False))
+        self.xKeyTrees.heading('Key Size', text='Key Size', command=lambda: self.sortTreeview('Key Size', False))
+        self.xKeyTrees.heading('Depth', text='Depth', command=lambda: self.sortTreeview('Depth', False))
 
         # Configure column widths and alignment
         self.xKeyTrees.column('#0', width=250, anchor='center')
@@ -87,6 +87,12 @@ class PARSNIP:
         xVsb = ttk.Scrollbar(self.root, orient="vertical", command=self.xKeyTrees.yview)
         xHsb = ttk.Scrollbar(self.root, orient="horizontal", command=self.xKeyTrees.xview)
         self.xKeyTrees.configure(yscrollcommand=xVsb.set, xscrollcommand=xHsb.set)
+
+        # Tags for Treeview items with original color scheme
+        self.xKeyTrees.tag_configure('key', background='lightblue')
+        self.xKeyTrees.tag_configure('name', background='lightgreen')
+        self.xKeyTrees.tag_configure('value', background='lightyellow')
+        self.xKeyTrees.tag_configure('type', background='lightpink')
 
         # Grid layout
         self.xKeyTrees.grid(row=2, column=0, columnspan=3, sticky='nsew')
@@ -132,11 +138,13 @@ class PARSNIP:
         self.xChangesFrame.grid_columnconfigure(0, weight=1)
 
     def setHivePath(self):
+        """Set the hive path based on user input."""
         sInputPath = self.xHivePathInputBox.get().strip()
         self.sHivePath = sInputPath
         messagebox.showinfo("Path Set", f"Hive path set to: {self.sHivePath}")
 
     def setEntryLimit(self):
+        """Set the entry limit based on user input."""
         try:
             self.nEntryLimit = int(self.xEntryLimitInput.get().strip())
             messagebox.showinfo("Entry Limit Set", f"Entry limit set to: {self.nEntryLimit}")
@@ -144,6 +152,7 @@ class PARSNIP:
             messagebox.showerror("Error", "Invalid entry limit. Please enter a valid number.")
 
     def setInterval(self):
+        """Set the auto-refresh interval based on user input."""
         try:
             self.nInterval = int(self.xIntervalInput.get().strip())
             messagebox.showinfo("Interval Set", f"Auto-refresh interval set to: {self.nInterval} seconds")
@@ -190,7 +199,7 @@ class PARSNIP:
     def loadGUITrees(self, xData):
         """Load parsed Registry data into Treeview."""
         for xItem in xData:
-            xParent = self.xKeyTrees.insert('', 'end', text=xItem['Key'], open=False, tags=('key',))
+            xParent = self.xKeyTrees.insert('', 'end', text=xItem['Key'], open=True, tags=('key',))
             self.xKeyTrees.insert(
                 xParent, 
                 'end', 
@@ -207,6 +216,7 @@ class PARSNIP:
             )
 
     def refreshPARSNIP(self):
+        """Refresh the PARSNIP GUI manually."""
         self.xLoadingLabel.config(text="Loading...")
         self.root.update_idletasks()
         
@@ -244,12 +254,14 @@ class PARSNIP:
         return 'system32' in sLowercaseHivePath or sLowercaseHivePath == sNtuserPath.lower()
 
     def toggleAutoRefreshPARSNIP(self):
+        """Toggle auto-refresh functionality."""
         self.bAutoRefresh = not self.bAutoRefresh
         self.xAutoRefreshButton.config(text="Disable Auto Refresh" if self.bAutoRefresh else "Enable Auto Refresh")
         if self.bAutoRefresh:
             self.autoRefreshPARSNIP()
 
     def autoRefreshPARSNIP(self):
+        """Auto-refresh the PARSNIP GUI at intervals."""
         if self.bAutoRefresh:
             self.refreshPARSNIP()
             self.root.after(self.nInterval * 1000, self.autoRefreshPARSNIP)
@@ -264,6 +276,57 @@ class PARSNIP:
         
         xDf.to_csv(sOutputCsv, index=False)
         messagebox.showinfo("Export Complete", f"Data exported to: {sOutputCsv}")
+
+    def sortTreeview(self, sCol, bReverse):
+        """Sort the Treeview using Python's sorted function by the given column."""
+        xData = []
+
+        if sCol == '#0':
+            for item in self.xKeyTrees.get_children(''):
+                key = self.xKeyTrees.item(item, 'text')
+                xData.append((key, item))
+            xDataSorted = sorted(xData, key=lambda item: item[0].lower(), reverse=bReverse)
+            
+            for idx, data in enumerate(xDataSorted):
+                self.xKeyTrees.move(data[1], '', idx) reference
+                
+        else:
+            for x in self.xKeyTrees.get_children(''):
+                key = self.xKeyTrees.item(x, 'text')
+                child_values = [self.xKeyTrees.set(child, sCol) for child in self.xKeyTrees.get_children(x)]
+                xData.append((key, child_values, x))
+
+            xDataSorted = sorted(xData, key=lambda item: item[1][0], reverse=bReverse)
+
+            for idx, data in enumerate(xDataSorted):
+                self.xKeyTrees.move(data[2], '', idx)
+
+        self.xKeyTrees.heading(sCol, command=lambda: self.sortTreeview(sCol, not bReverse))
+
+        self.exportSortedCSV()
+
+    def exportSortedCSV(self):
+        """Export all Treeview data to CSV, regardless of the sorting column."""
+        xData = []
+        for item in self.xKeyTrees.get_children(''):
+            key = self.xKeyTrees.item(item, 'text')
+            for child in self.xKeyTrees.get_children(item):
+                xData.append({
+                    "Key": key,
+                    "Name": self.xKeyTrees.set(child, 'Name'),
+                    "Value": self.xKeyTrees.set(child, 'Value'),
+                    "Type": self.xKeyTrees.set(child, 'Type'),
+                    "Subkey Count": self.xKeyTrees.set(child, 'Subkey Count'),
+                    "Value Count": self.xKeyTrees.set(child, 'Value Count'),
+                    "Key Size": self.xKeyTrees.set(child, 'Key Size'),
+                    "Depth": self.xKeyTrees.set(child, 'Depth')
+                })
+        
+        df = pd.DataFrame(xData)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_csv = os.path.join(sScriptPath, f"snapshot_sorted_{timestamp}.csv")
+        df.to_csv(output_csv, index=False)
+        messagebox.showinfo("Export Complete", f"Sorted data exported to: {output_csv}")
 
 # Main function to initialize and run the GUI
 def main():

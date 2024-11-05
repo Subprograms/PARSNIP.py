@@ -1,6 +1,6 @@
 The usage of PARSNIP.py can be seen in PARSNIP_Usage_Flowchart
 
-A detailed step-by-step instruction is porvided below as well:
+A detailed step-by-step instruction is provided below as well:
 1. Download PARSNIP.py
 2. Run PARSNIP.py in a Command Prompt with Administrator privileges using "Python PARSNIP.py" in the proper directory
 3. Specify a hive file path (i.e. C:\Windows\System32\config\SAM)

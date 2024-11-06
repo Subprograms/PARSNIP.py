@@ -337,6 +337,35 @@ class PARSNIP:
         df.to_csv(output_csv, index=False)
         messagebox.showinfo("Export Complete", f"Sorted data exported to: {output_csv}")
 
+    def compareRegistrySnapshots(self, xOldData, xNewData):
+        """Compare two snapshots of Registry data."""
+        xChanges = []
+        xOldDataSet = {f"{row['Key']}|{row['Name']}|{row['Value']}" for row in xOldData}
+        xNewDataSet = {f"{row['Key']}|{row['Name']}|{row['Value']}" for row in xNewData}
+
+        xAdded = xNewDataSet - xOldDataSet
+        xRemoved = xOldDataSet - xNewDataSet
+
+        for i in xAdded:
+            xChanges.append({"Change": "Added", "Detail": i})
+
+        for i in xRemoved:
+            xChanges.append({"Change": "Removed", "Detail": i})
+
+        return xChanges
+
+    def checkChanges(self, xOldData, xNewData):
+        """Check for changes in the Registry."""
+        xChanges = self.compareRegistrySnapshots(xOldData, xNewData)
+
+        self.xChangesList.delete(*self.xChangesList.get_children())
+
+        for change in xChanges:
+            self.xChangesList.insert('', 'end', values=(change['Change'], change['Detail']))
+            
+        xChangesData = [{"Action": self.xChangesList.set(item, 'Action'), "Description": self.xChangesList.set(item, 'Description')} for item in self.xChangesList.get_children()]
+        self.exportToCSV(xChangesData, 'changes')
+
 # Main function to initialize and run the GUI
 def main():
     root = tk.Tk()

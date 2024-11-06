@@ -266,17 +266,6 @@ class PARSNIP:
             self.refreshPARSNIP()
             self.root.after(self.nInterval * 1000, self.autoRefreshPARSNIP)
 
-    def exportToCSV(self, xData, sPrefix):
-        xDf = pd.DataFrame(xData)
-        sTimestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        sOutputCsv = os.path.join(sScriptPath, f"{sPrefix}_{sTimestamp}.csv")
-        
-        if len(xDf) > self.nEntryLimit:
-            xDf = xDf.head(self.nEntryLimit)
-        
-        xDf.to_csv(sOutputCsv, index=False)
-        messagebox.showinfo("Export Complete", f"Data exported to: {sOutputCsv}")
-
     def sortTreeview(self, sCol, bReverse):
         """Sort the Treeview using Python's sorted function by the given column."""
         xData = []
@@ -288,7 +277,7 @@ class PARSNIP:
             xDataSorted = sorted(xData, key=lambda item: item[0].lower(), reverse=bReverse)
             
             for idx, data in enumerate(xDataSorted):
-                self.xKeyTrees.move(data[1], '', idx) reference
+                self.xKeyTrees.move(data[1], '', idx)
                 
         else:
             for x in self.xKeyTrees.get_children(''):
@@ -305,9 +294,27 @@ class PARSNIP:
 
         self.exportSortedCSV()
 
+    def exportToCSV(self, xData, sPrefix):
+        """Export the data to CSV."""
+        columns = ["Key", "Name", "Value", "Type", "Subkey Count", "Value Count", "Key Size", "Depth"]
+        xDf = pd.DataFrame(xData, columns=columns)
+
+        xDf.dropna(axis=1, how='all', inplace=True)
+
+        sTimestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        sOutputCsv = os.path.join(sScriptPath, f"{sPrefix}_{sTimestamp}.csv")
+        
+        if len(xDf) > self.nEntryLimit:
+            xDf = xDf.head(self.nEntryLimit)
+        
+        xDf.to_csv(sOutputCsv, index=False)
+        messagebox.showinfo("Export Complete", f"Data exported to: {sOutputCsv}")
+
     def exportSortedCSV(self):
-        """Export all Treeview data to CSV, regardless of the sorting column."""
+        """Export sorted Treeview data to CSV."""
+        columns = ["Key", "Name", "Value", "Type", "Subkey Count", "Value Count", "Key Size", "Depth"]
         xData = []
+
         for item in self.xKeyTrees.get_children(''):
             key = self.xKeyTrees.item(item, 'text')
             for child in self.xKeyTrees.get_children(item):
@@ -322,7 +329,9 @@ class PARSNIP:
                     "Depth": self.xKeyTrees.set(child, 'Depth')
                 })
         
-        df = pd.DataFrame(xData)
+        df = pd.DataFrame(xData, columns=columns)
+        df.dropna(axis=1, how='all', inplace=True)
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_csv = os.path.join(sScriptPath, f"snapshot_sorted_{timestamp}.csv")
         df.to_csv(output_csv, index=False)

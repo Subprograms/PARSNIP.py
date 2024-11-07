@@ -296,15 +296,21 @@ class PARSNIP:
 
     def exportToCSV(self, xData, sPrefix):
         """Export the data to CSV."""
-        columns = ["Key", "Name", "Value", "Type", "Subkey Count", "Value Count", "Key Size", "Depth"]
+        if sPrefix == "snapshot":
+            columns = ["Key", "Name", "Value", "Type", "Subkey Count", "Value Count", "Key Size", "Depth"]
+        elif sPrefix == "changes":
+            columns = ["Action", "Description"]
+        else:
+            messagebox.showerror("Error", f"Unknown prefix type: {sPrefix}")
+            return
+    
         xDf = pd.DataFrame(xData, columns=columns)
-
         xDf.dropna(axis=1, how='all', inplace=True)
-
+    
         sTimestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         sOutputCsv = os.path.join(sScriptPath, f"{sPrefix}_{sTimestamp}.csv")
         
-        if len(xDf) > self.nEntryLimit:
+        if sPrefix == "snapshot" and len(xDf) > self.nEntryLimit:
             xDf = xDf.head(self.nEntryLimit)
         
         xDf.to_csv(sOutputCsv, index=False)

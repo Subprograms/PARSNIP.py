@@ -159,15 +159,80 @@ class PARSNIP:
         except ValueError:
             messagebox.showerror("Error", "Invalid interval. Please enter a valid number.")
 
+    def exportRegistry(self):
+        """Export unparsed Registry to the appropriate file in the script directory."""
+        sHiveType = os.path.basename(self.sHivePath).split('.')[0].lower()
+        sHiveExtension = os.path.splitext(self.sHivePath)[1]
+
+        if sHiveType == 'ntuser':
+            sHiveParameter = 'HKCU'
+            self.sExportPath = os.path.join(sScriptPath, os.path.basename(self.sHivePath))
+        elif sHiveType == 'system':
+            sHiveParameter = 'HKLM\\System'
+            self.sExportPath = os.path.join(sScriptPath, os.path.basename(self.sHivePath) + sHiveExtension)
+        elif sHiveType == 'software':
+            sHiveParameter = 'HKLM\\Software'
+            self.sExportPath = os.path.join(sScriptPath, os.path.basename(self.sHivePath) + sHiveExtension)
+        elif sHiveType == 'sam':
+            sHiveParameter = 'HKLM\\SAM'
+            self.sExportPath = os.path.join(sScriptPath, os.path.basename(self.sHivePath) + sHiveExtension)
+        elif sHiveType == 'security':
+            sHiveParameter = 'HKLM\\SECURITY'
+            self.sExportPath = os.path.join(sScriptPath, os.path.basename(self.sHivePath) + sHiveExtension)
+        elif sHiveType == 'hardware':
+            sHiveParameter = 'HKLM\\HARDWARE'
+            self.sExportPath = os.path.join(sScriptPath, os.path.basename(self.sHivePath) + sHiveExtension)
+        else:
+            sHiveParameter = 'HKLM'  # Default to HKLM if not specified
+            self.sExportPath = os.path.join(sScriptPath, os.path.basename(self.sHivePath) + sHiveExtension)
+
+        try:
+            subprocess.check_call(['reg', 'save', sHiveParameter, self.sExportPath, '/y'])
+            messagebox.showinfo("Success", f"Unparsed Registry exported to: {self.sExportPath}")
+        except subprocess.CalledProcessError as e:
+            # If exporting fails due to access denied, try using VSS
+            if 'access is denied' in str(e).lower():
+                self.exportRegistryUsingVSS(sHiveType)
+            else:
+                messagebox.showerror("Error", f"Error exporting Parsed Registry: {e}")
+
+    def exportRegistryUsingVSS(self, sHiveType):
+        """Export Registry using VSS."""
+        try:
+            sShadowCopyPath = self.createVSSSnapshot()
+            sShadowHivePath = os.path.join(sShadowCopyPath, f'Windows\\System32\\config\\{sHiveType}')
+            sShadowExportPath = os.path.join(sScriptPath, f"{sHiveType}_shadow_copy.dat")
+
+            subprocess.check_call(['reg', 'save', f'HKLM\\{sHiveType}', sShadowExportPath, '/y'])
+            messagebox.showinfo("Success", f"Unparsed Registry exported from shadow copy to: {sShadowExportPath}")
+            self.sExportPath = sShadowExportPath
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Error exporting Parsed Registry using VSS: {e}")
+
+    def createVSSSnapshot(self):
+        """Create a VSS snapshot and return the shadow copy path."""
+        try:
+            subprocess.check_call(['vssadmin', 'create', 'shadow', '/for=C:'])
+            xShadowList = subprocess.check_output(['vssadmin', 'list', 'shadows']).decode()
+            for i in xShadowList.split('\n'):
+                if "Shadow Copy Volume" in i:
+                    sStart = i.find('{')
+                    sEnd = i.find('}')
+                    return f"\\\\?\\GLOBALROOT\\Device\\HarddiskVolumeShadowCopy{i[sStart+1:sEnd]}\\"
+        except Exception as e:
+            messagebox.showerror("Error", f"Error creating VSS snapshot: {e}")
+            return None
+
     def parseRegistry(self, sHivePath):
-        """Parse Registry using regipy."""
+        """Parse the registry using regipy and preprocess the data."""
         xData = []
         subkey_counts = {}
 
         try:
             with ThreadPoolExecutor() as executor:
                 xHive = RegistryHive(sHivePath)
-                
+
                 for xSubkey in xHive.recurse_subkeys():
                     sKeyPath = xSubkey.path
                     parent_path = '\\'.join(sKeyPath.split('\\')[:-1])
@@ -175,7 +240,7 @@ class PARSNIP:
                         subkey_counts[parent_path] += 1
                     else:
                         subkey_counts[parent_path] = 1
-                    
+
                     nDepth = sKeyPath.count('\\')
                     nKeySize = len(sKeyPath.encode('utf-8'))
                     nValueCount = len(xSubkey.values)
@@ -192,9 +257,33 @@ class PARSNIP:
                             "Value": str(xValue.value),
                             "Type": xValue.value_type
                         })
+            
+            # Export the parsed data
+            self.exportToCSV(xData, 'raw')
+            
+            # Preprocess the data
+            self.preprocessAndExport(xData)
+
         except Exception as e:
             messagebox.showerror("Error", f"Error parsing hive: {e}")
         return xData
+
+    def preprocessAndExport(self, xData):
+        """Preprocess parsed data and export to CSV."""
+        xDf = pd.DataFrame(xData)
+        
+        if 'Type' in xDf.columns:
+            type_encoded = pd.get_dummies(xDf['Type'], prefix='Type')
+            xDf = pd.concat([xDf.drop('Type', axis=1), type_encoded], axis=1)
+        
+        sTimestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        sOutputCsv = os.path.join(sScriptPath, f"preprocessed_{sTimestamp}.csv")
+        
+        if len(xDf) > self.nEntryLimit:
+            xDf = xDf.head(self.nEntryLimit)
+        
+        xDf.to_csv(sOutputCsv, index=False)
+        messagebox.showinfo("Export Complete", f"Preprocessed data exported to: {sOutputCsv}")
 
     def loadGUITrees(self, xData):
         """Load parsed Registry data into Treeview."""
@@ -296,21 +385,15 @@ class PARSNIP:
 
     def exportToCSV(self, xData, sPrefix):
         """Export the data to CSV."""
-        if sPrefix == "snapshot":
-            columns = ["Key", "Name", "Value", "Type", "Subkey Count", "Value Count", "Key Size", "Depth"]
-        elif sPrefix == "changes":
-            columns = ["Action", "Description"]
-        else:
-            messagebox.showerror("Error", f"Unknown prefix type: {sPrefix}")
-            return
-    
+        columns = ["Key", "Name", "Value", "Type", "Subkey Count", "Value Count", "Key Size", "Depth"]
         xDf = pd.DataFrame(xData, columns=columns)
+
         xDf.dropna(axis=1, how='all', inplace=True)
-    
+
         sTimestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         sOutputCsv = os.path.join(sScriptPath, f"{sPrefix}_{sTimestamp}.csv")
         
-        if sPrefix == "snapshot" and len(xDf) > self.nEntryLimit:
+        if len(xDf) > self.nEntryLimit:
             xDf = xDf.head(self.nEntryLimit)
         
         xDf.to_csv(sOutputCsv, index=False)
@@ -342,35 +425,6 @@ class PARSNIP:
         output_csv = os.path.join(sScriptPath, f"snapshot_sorted_{timestamp}.csv")
         df.to_csv(output_csv, index=False)
         messagebox.showinfo("Export Complete", f"Sorted data exported to: {output_csv}")
-
-    def compareRegistrySnapshots(self, xOldData, xNewData):
-        """Compare two snapshots of Registry data."""
-        xChanges = []
-        xOldDataSet = {f"{row['Key']}|{row['Name']}|{row['Value']}" for row in xOldData}
-        xNewDataSet = {f"{row['Key']}|{row['Name']}|{row['Value']}" for row in xNewData}
-
-        xAdded = xNewDataSet - xOldDataSet
-        xRemoved = xOldDataSet - xNewDataSet
-
-        for i in xAdded:
-            xChanges.append({"Change": "Added", "Detail": i})
-
-        for i in xRemoved:
-            xChanges.append({"Change": "Removed", "Detail": i})
-
-        return xChanges
-
-    def checkChanges(self, xOldData, xNewData):
-        """Check for changes in the Registry."""
-        xChanges = self.compareRegistrySnapshots(xOldData, xNewData)
-
-        self.xChangesList.delete(*self.xChangesList.get_children())
-
-        for change in xChanges:
-            self.xChangesList.insert('', 'end', values=(change['Change'], change['Detail']))
-            
-        xChangesData = [{"Action": self.xChangesList.set(item, 'Action'), "Description": self.xChangesList.set(item, 'Description')} for item in self.xChangesList.get_children()]
-        self.exportToCSV(xChangesData, 'changes')
 
 # Main function to initialize and run the GUI
 def main():

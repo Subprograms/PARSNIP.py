@@ -257,35 +257,6 @@ class PARSNIP:
         self.xLoadingLabel = ttk.Label(self.root, text="", anchor='center', font=('Arial', 10, 'italic'))
         self.xLoadingLabel.grid(row=7, column=0, columnspan=3, pady=10, sticky='s')
 
-    def setHivePath(self):
-        path = self.xHivePathInputBox.get().strip()
-        self.sHivePath = path
-        messagebox.showinfo("Path Set", f"Hive path set to: {path}")
-
-    def setEntryLimit(self):
-        try:
-            self.nEntryLimit = int(self.xEntryLimitInput.get().strip())
-            messagebox.showinfo("Entry Limit Set", f"Entry limit set to: {self.nEntryLimit}")
-        except ValueError:
-            messagebox.showerror("Error", "Invalid entry limit.")
-
-    def setInterval(self):
-        try:
-            self.nInterval = int(self.xIntervalInput.get().strip())
-            messagebox.showinfo("Interval Set", f"Auto-refresh interval set to: {self.nInterval} seconds")
-        except ValueError:
-            messagebox.showerror("Error", "Invalid interval.")
-
-    def setRandomForestPath(self):
-        rfpath = self.xRFInput.get().strip()
-        self.sRandomForestPath = rfpath
-        messagebox.showinfo("Path Set", f"Random Forest file set to: {rfpath}")
-
-    def setClassifiedCsvPath(self):
-        csvpath = self.xClassCsvInput.get().strip()
-        self.sClassifiedCsvPath = csvpath
-        messagebox.showinfo("Path Set", f"Classified CSV set to: {csvpath}")
-
     # Registry parsing
     def parseRegistry(self, hive_path):
         xData = []
